@@ -158,6 +158,8 @@ class Search:
         for i, j in board.empty_positions():
             new_board = deepcopy(board)
             kills = new_board.play((i, j), color)
+            if not kills > 0:
+                continue
             if self.depth > 1:
                 opponent = Search(self.depth - 1, random=self.random)
                 opponent_move, opponent_kills = opponent.move_kills(
@@ -167,7 +169,7 @@ class Search:
                 else:
                     me_again = Search(self.depth - 1, random=self.random)
                     next_move, next_kills = me_again.move_kills(
-                            new_board, Reverse(color))
+                            new_board, color)
                     if next_move:
                         kills += next_kills
             if kills > best_kills:
@@ -221,7 +223,8 @@ class Game:
                     new_board = deepcopy(self.board)
                     new_board.play(move, color, highlight=True)
                     print new_board
-                self.board.play(move, color)
+                kills = self.board.play(move, color)
+                assert kills > 0, "invalid move:\n%s" % self.board
                 passes = 0
             else:
                 if show:
@@ -290,9 +293,9 @@ class GameSet:
                 self.player1_time, self.player2_time)
 
 if __name__ == '__main__':
-    g = Game(Search(2), Search(3))
+    g = Game(Search(3), Search(4))
     g.run(show=True)
 
-    #games = GameSet(Search(2), RandomGreedy())
-    #games.run(20, show=True)
+    #games = GameSet(Search(2), Search(3))
+    #games.run(100, show=True)
     #print games.result()
