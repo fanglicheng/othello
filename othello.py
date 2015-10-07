@@ -112,82 +112,53 @@ class Random:
             return None
 
 
-class Greedy:
-    def move(self, board, color):
-        best_move = None
-        best_kills = 0
-        for i, j in board.empty_positions():
-            kills = deepcopy(board).play((i, j), color)
-            if kills > best_kills:
-                best_kills = kills
-                best_move = (i, j)
-        return best_move
-
-
-class RandomGreedy:
-    def move(self, board, color):
-        best_move = []
-        best_kills = 0
-        for i, j in board.empty_positions():
-            kills = deepcopy(board).play((i, j), color)
-            if kills > best_kills:
-                best_kills = kills
-                best_move = [(i, j)]
-            elif kills == best_kills:
-                best_move.append((i, j))
-        if best_move:
-            return choice(best_move)
-        else:
-            return None
-
-
 class Search:
     def __init__(self, depth, random=True):
         self.depth = depth
         self.random = random
 
     def move(self, board, color):
-        return self.move_kills(board, color)[0]
+        return self.move_score(board, color)[0]
 
-    def move_kills(self, board, color):
+    def move_score(self, board, color):
         if self.random:
             best_move = []
         else:
             best_move = None
-        best_kills = -64
+        best_score = -64
         for i, j in board.empty_positions():
             new_board = deepcopy(board)
             kills = new_board.play((i, j), color)
             if not kills > 0:
                 continue
+            score = 2*kills + 1
             if self.depth > 1:
                 opponent = Search(self.depth - 1, random=self.random)
-                opponent_move, opponent_kills = opponent.move_kills(
+                opponent_move, opponent_score = opponent.move_score(
                         new_board, Reverse(color))
                 if opponent_move:
-                    kills -= opponent_kills
+                    score -= opponent_score
                 else:
                     me_again = Search(self.depth - 1, random=self.random)
-                    next_move, next_kills = me_again.move_kills(
+                    next_move, next_score = me_again.move_score(
                             new_board, color)
                     if next_move:
-                        kills += next_kills
-            if kills > best_kills:
-                best_kills = kills
+                        score += next_score
+            if score > best_score:
+                best_score = score
                 if self.random:
                     best_move = [(i, j)]
                 else:
                     best_move = (i, j)
-            elif self.random and kills == best_kills:
+            elif self.random and score == best_score:
                 best_move.append((i, j))
         if self.random:
             if best_move:
-                return choice(best_move), best_kills
+                return choice(best_move), best_score
             else:
-                return None, best_kills
+                return None, best_score
         else:
-            return best_move, best_kills
-
+            return best_move, best_score
 
 class Game:
     def __init__(self, player1, player2):
@@ -293,9 +264,9 @@ class GameSet:
                 self.player1_time, self.player2_time)
 
 if __name__ == '__main__':
-    g = Game(Search(3), Search(4))
+    g = Game(Search(4), Search(5))
     g.run(show=True)
 
-    #games = GameSet(Search(2), Search(3))
+    #games = GameSet(Search(4), Search(5))
     #games.run(100, show=True)
     #print games.result()
