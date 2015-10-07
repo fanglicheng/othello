@@ -3,7 +3,14 @@
 from copy import deepcopy
 from random import choice
 from sys import stdout
+from time import sleep
 from time import time
+from urlparse import urlparse
+
+import BaseHTTPServer
+import SimpleHTTPServer
+
+RequestHandler = SimpleHTTPServer.SimpleHTTPRequestHandler
 
 EMPTY = '.'
 BLACK = 'x'
@@ -263,9 +270,48 @@ class GameSet:
                 self.black_wins, self.draws, self.white_wins,
                 self.player1_time, self.player2_time)
 
+
+def parse_query(path):
+    query = urlparse(path).query
+    print query
+    return dict(pair.split('=') for pair in query.split('&'))
+
+
+class Handler(RequestHandler):
+    def do_GET(self):
+        i = self.path.find('?')
+        if i != -1:
+            method = self.path[1:i]
+            getattr(self, method)(parse_query(self.path))
+        else:
+            RequestHandler.do_GET(self)
+
+    def cell(self, query):
+        i = int(query['i'])
+        j = int(query['j'])
+        self.wfile.write(board.grid[i][j])
+
+    def play(self, query):
+        i = int(query['i'])
+        j = int(query['j'])
+        kills = board.play((i, j), BLACK)
+        self.wfile.write(kills)
+
+    def respond(self, query):
+        move = Search(3).move(board, WHITE)
+        kills = board.play(move, WHITE)
+        self.wfile.write(kills)
+
+def serve():
+    server = BaseHTTPServer.HTTPServer(("", 8080), Handler)
+    server.serve_forever()
+
 if __name__ == '__main__':
-    g = Game(Search(4), Search(5))
-    g.run(show=True)
+    board = Board()
+    board.start()
+    serve()
+    #g = Game(Search(4), Search(5))
+    #g.run(show=True)
 
     #games = GameSet(Search(4), Search(5))
     #games.run(100, show=True)
