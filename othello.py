@@ -44,6 +44,15 @@ class Board:
     def valid(self, i, j):
         return 0 <= i < 8 and 0 <= j < 8
 
+    def try_play(self, move, color):
+        i, j = move
+        if self.grid[i][j] != EMPTY:
+            return 0
+        kills = deepcopy(self).play(move, color)
+        if kills > 0:
+            self.play(move, color)
+        return kills
+
     def play(self, move, color, highlight=False):
         i, j = move
         self.grid[i][j] = HighLight(color) if highlight else color
@@ -310,11 +319,11 @@ class Handler(RequestHandler):
     def play(self, query):
         i = int(query['i'])
         j = int(query['j'])
-        kills = board.play((i, j), BLACK)
+        kills = board.try_play((i, j), BLACK)
         self.wfile.write(kills)
 
     def respond(self, query):
-        move = Search(5).move(board, WHITE)
+        move = Search(6).move(board, WHITE)
         kills = board.play(move, WHITE)
         self.wfile.write(kills)
 
@@ -323,12 +332,12 @@ def serve():
     server.serve_forever()
 
 if __name__ == '__main__':
-    #board = Board()
-    #board.start()
-    #serve()
+    board = Board()
+    board.start()
+    serve()
 
-    g = Game(Search(2, random=False, alphabeta=False), Search(7, random=False, alphabeta=True))
-    g.run(show=True)
+    #g = Game(Search(2, random=False, alphabeta=False), Search(7, random=False, alphabeta=True))
+    #g.run(show=True)
 
     #games = GameSet(Search(4), Search(5))
     #games.run(100, show=True)

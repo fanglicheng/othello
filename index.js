@@ -32,9 +32,11 @@ function Cell(i, j) {
     }.bind(cell)
 
     cell.click(function() {
-            this.put(Piece('black'))
             $.get(SERVER + '/play', {i: this.i, j: this. j}, function(data) {
                 console.log(data)
+                if (data == '0') {
+                    return
+                }
                 board_refresh()
                 $.get(SERVER + '/respond', {param: 'null'}, function(data) {
                     console.log(data)
