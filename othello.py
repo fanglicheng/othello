@@ -32,13 +32,14 @@ def HighLight(color):
 class Board:
     def __init__(self):
         self.grid = [[EMPTY] * 8 for _ in xrange(8)]
+        self.blacks = 0
+        self.whites = 0
 
     def __str__(self):
-        blacks, whites = self.count()
         return '\n%s\n%s-%s' % (
                 '\n'.join(' '.join(str(x) for x in row)
                           for row in self.grid),
-                blacks, whites)
+                self.blacks, self.whites)
 
     def valid(self, i, j):
         return 0 <= i < 8 and 0 <= j < 8
@@ -54,6 +55,12 @@ class Board:
                             i, j, color,
                             lambda x, y: (x + x_inc, y + y_inc),
                             highlight=highlight)
+        if color == BLACK:
+            self.blacks += kills + 1
+            self.whites -= kills
+        elif color == WHITE:
+            self.whites += kills + 1
+            self.blacks -= kills
         return kills
 
     def play_direction(self, i, j, color, next, highlight=False):
@@ -109,6 +116,12 @@ class Board:
                 whites += 1
         return blacks, whites
 
+    def lead(self, color):
+        if color == BLACK:
+            return self.blacks - self.whites
+        elif color == WHITE:
+            return self.whites - self.blacks
+
 
 class Random:
     def move(self, board, color):
@@ -120,43 +133,50 @@ class Random:
 
 
 class Search:
-    def __init__(self, depth, random=True):
+    def __init__(self, depth, random=True, alphabeta=True):
         self.depth = depth
         self.random = random
+        self.alphabeta = alphabeta
 
     def move(self, board, color):
         return self.move_score(board, color)[0]
 
-    def move_score(self, board, color):
+    def move_score(self, board, color, alpha=-65, beta=65):
         if self.random:
             best_move = []
         else:
             best_move = None
-        best_score = -64
+        best_score = -65
         for i, j in board.empty_positions():
             new_board = deepcopy(board)
             kills = new_board.play((i, j), color)
             if not kills > 0:
                 continue
-            score = 2*kills + 1
+            score = new_board.lead(color)
             if self.depth > 1:
-                opponent = Search(self.depth - 1, random=self.random)
+                opponent = Search(self.depth - 1, random=self.random,
+                                  alphabeta=self.alphabeta)
                 opponent_move, opponent_score = opponent.move_score(
-                        new_board, Reverse(color))
+                        new_board, Reverse(color), -beta, -alpha)
                 if opponent_move:
-                    score -= opponent_score
+                    score = -opponent_score
                 else:
-                    me_again = Search(self.depth - 1, random=self.random)
+                    me_again = Search(self.depth - 1, random=self.random,
+                                      alphabeta=self.alphabeta)
                     next_move, next_score = me_again.move_score(
-                            new_board, color)
+                            new_board, color, alpha, beta)
                     if next_move:
-                        score += next_score
+                        score = next_score
             if score > best_score:
                 best_score = score
                 if self.random:
                     best_move = [(i, j)]
                 else:
                     best_move = (i, j)
+                if best_score > alpha:
+                    alpha = best_score
+                if self.alphabeta and alpha >= beta:
+                    break
             elif self.random and score == best_score:
                 best_move.append((i, j))
         if self.random:
@@ -215,22 +235,18 @@ class Game:
             color = Reverse(color)
 
         if show:
-            counts = self.board.count()
-            blacks, whites = counts
-            if blacks > whites:
+            if self.board.blacks > self.board.whites:
                     print '%s won!' % self.player1.__class__.__name__
-            elif blacks < whites:
+            elif self.board.blacks < self.board.whites:
                     print '%s won!' % self.player2.__class__.__name__
             else:
                     print 'draw!'
             print 'time: %.2f, %.2f' % (self.player1.time, self.player2.time)
 
     def winner(self):
-        counts = self.board.count()
-        blacks, whites = counts
-        if blacks > whites:
+        if self.board.blacks > self.board.whites:
             return BLACK
-        elif blacks < whites:
+        elif self.board.blacks < self.board.whites:
             return WHITE
         else:
             return EMPTY
@@ -298,7 +314,7 @@ class Handler(RequestHandler):
         self.wfile.write(kills)
 
     def respond(self, query):
-        move = Search(3).move(board, WHITE)
+        move = Search(5).move(board, WHITE)
         kills = board.play(move, WHITE)
         self.wfile.write(kills)
 
@@ -307,11 +323,12 @@ def serve():
     server.serve_forever()
 
 if __name__ == '__main__':
-    board = Board()
-    board.start()
-    serve()
-    #g = Game(Search(4), Search(5))
-    #g.run(show=True)
+    #board = Board()
+    #board.start()
+    #serve()
+
+    g = Game(Search(2, random=False, alphabeta=False), Search(7, random=False, alphabeta=True))
+    g.run(show=True)
 
     #games = GameSet(Search(4), Search(5))
     #games.run(100, show=True)
