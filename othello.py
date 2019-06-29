@@ -16,126 +16,135 @@ EMPTY = '.'
 BLACK = 'x'
 WHITE = 'o'
 
-def Reverse(color):
-    if color == BLACK:
-        return WHITE
-    if color == WHITE:
-        return BLACK
-
-def HighLight(color):
-    if color == BLACK:
-        return 'X'
-    if color == WHITE:
-        return 'O'
+REVERSE = {BLACK: WHITE, WHITE: BLACK}
+HIGHLIGHT = {BLACK: 'X', WHITE: 'O'}
 
 
 class Board:
     def __init__(self):
         self.grid = [[EMPTY] * 8 for _ in xrange(8)]
-        self.blacks = 0
-        self.whites = 0
+        self.grid[3][3] = BLACK
+        self.grid[3][4] = WHITE
+        self.grid[4][4] = BLACK
+        self.grid[4][3] = WHITE
+        self.moves = []
+        self.count = {BLACK: 2, WHITE: 2}
 
     def __str__(self):
         return '\n%s\n%s-%s' % (
                 '\n'.join(' '.join(str(x) for x in row)
                           for row in self.grid),
-                self.blacks, self.whites)
+                self.count[BLACK], self.count[WHITE])
 
     def valid(self, i, j):
         return 0 <= i < 8 and 0 <= j < 8
 
-    def try_play(self, move, color):
-        i, j = move
-        if self.grid[i][j] != EMPTY:
+    def try_play(self, i, j, color):
+        if not self.valid(i, j):
             return 0
-        kills = deepcopy(self).play(move, color)
-        if kills > 0:
-            self.play(move, color)
-        return kills
+        kills = list(self.kills(i, j, color))
+        if kills:
+            self.play(i, j, color, kills=kills)
+        return len(kills)
 
-    def play(self, move, color, highlight=False):
-        i, j = move
-        self.grid[i][j] = HighLight(color) if highlight else color
-        kills = 0
-        for x_inc in [-1, 0, 1]:
-            for y_inc in [-1, 0, 1]:
-                if not (x_inc == 0 and y_inc == 0):
-                    kills += self.play_direction(
-                            i, j, color,
-                            lambda x, y: (x + x_inc, y + y_inc),
-                            highlight=highlight)
-        if color == BLACK:
-            self.blacks += kills + 1
-            self.whites -= kills
-        elif color == WHITE:
-            self.whites += kills + 1
-            self.blacks -= kills
-        return kills
+    def play(self, i, j, color, kills=None):
+        assert self.valid(i, j)
+        assert self.grid[i][j] == EMPTY
 
-    def play_direction(self, i, j, color, next, highlight=False):
-        i, j = next(i, j)
+        if kills is None:
+            kills = list(self.kills(i, j, color))
+        k = len(kills)
+        assert k > 0
+
+        self.moves.append((i, j, color, kills))
+
+        self.grid[i][j] = color
+        for i, j in kills:
+            self.grid[i][j] = color
+
+        self.count[color] += k + 1
+        self.count[REVERSE[color]] -= k
+
+        return k
+
+    def unplay(self):
+        i, j, color, kills = self.moves.pop()
+        self.grid[i][j] = EMPTY
+        reverse = REVERSE[color]
+        for i, j in kills:
+            self.grid[i][j] = reverse
+        k = len(kills)
+        self.count[color] -= k + 1
+        self.count[REVERSE[color]] += k
+
+    def kills(self, i, j, color):
+        for i_inc in [-1, 0, 1]:
+            for j_inc in [-1, 0, 1]:
+                if i_inc == 0 and j_inc == 0:
+                    continue
+                for kill in self.kills_in(i, j, color, i_inc, j_inc):
+                    yield kill
+
+    def kills_in(self, i, j, color, i_inc, j_inc):
+        i += i_inc
+        j += j_inc
+        reverse = REVERSE[color]
         kills = []
-        while self.valid(i, j):
-            if self.grid[i][j] == Reverse(color):
-                kills.append((i, j))
-                i, j = next(i, j)
-            else:
-                break
+        while self.valid(i, j) and self.grid[i][j] == reverse:
+            kills.append((i, j))
+            i += i_inc
+            j += j_inc
         if self.valid(i, j) and self.grid[i][j] == color:
-            for x, y in kills:
-                self.grid[x][y] = HighLight(color) if highlight else color
-            return len(kills)
+            return kills
         else:
-            return 0
-
-    def start(self):
-        self.play((3, 3), BLACK)
-        self.play((3, 4), WHITE)
-        self.play((4, 4), BLACK)
-        self.play((4, 3), WHITE)
+            return []
 
     def positions(self):
         for i in xrange(8):
             for j in xrange(8):
                 yield i, j
 
-    def empty_positions(self):
+    def empty(self):
         for i, j in self.positions():
             if self.grid[i][j] == EMPTY:
                 yield i, j
 
-    def legal_positions(self, color):
-        for i, j in self.empty_positions():
-            if deepcopy(self).play((i, j), color) > 0:
-                yield i, j
+    def valid_moves(self, color):
+        for i, j in self.empty():
+            kills = list(self.kills(i, j, color))
+            if kills:
+                yield i, j, kills
 
-    def show_legal_positions(self, color):
+    def show_moves(self, color):
         board = deepcopy(self)
-        for i, j in self.legal_positions(color):
+        for i, j, kills in self.valid_moves(color):
             board.grid[i][j] = 'B' if color == BLACK else 'W'
         return str(board)
 
-    def count(self):
-        blacks = 0
-        whites = 0
-        for i, j in self.positions():
-            if self.grid[i][j] == 'x':
-                blacks += 1
-            elif self.grid[i][j] == 'o':
-                whites += 1
-        return blacks, whites
+    def show_last_move(self):
+        board = deepcopy(self)
+        i, j, color, kills = self.moves[-1]
+        color = HIGHLIGHT[color]
+        board.grid[i][j] = color
+        for i, j in kills:
+            board.grid[i][j] = color
+        return str(board)
 
     def lead(self, color):
-        if color == BLACK:
-            return self.blacks - self.whites
-        elif color == WHITE:
-            return self.whites - self.blacks
+        return self.count[color] - self.count[REVERSE[color]]
+    
+    def load(self):
+        return float(64 - len(list(self.empty()))) / 64
+
+    def potential(self, color):
+        l = self.load()
+        return l*self.self.count[color] + (1 - l)*len(list(self.valid_moves(color)))*3
 
 
 class Random:
     def move(self, board, color):
         try:
-            move = choice(list(board.legal_positions(color)))
+            move = choice(list(board.valid_moves(color)))
             return move
         except IndexError:
             return None
@@ -155,27 +164,27 @@ class Search:
             best_move = []
         else:
             best_move = None
+
         best_score = -65
-        for i, j in board.empty_positions():
-            new_board = deepcopy(board)
-            kills = new_board.play((i, j), color)
-            if not kills > 0:
-                continue
-            score = new_board.lead(color)
+
+        for i, j, kills in board.valid_moves(color):
+            board.play(i, j, color, kills=kills)
+            score = board.count[color]
             if self.depth > 1:
                 opponent = Search(self.depth - 1, random=self.random,
                                   alphabeta=self.alphabeta)
                 opponent_move, opponent_score = opponent.move_score(
-                        new_board, Reverse(color), -beta, -alpha)
+                        board, REVERSE[color], -beta, -alpha)
                 if opponent_move:
                     score = -opponent_score
                 else:
                     me_again = Search(self.depth - 1, random=self.random,
                                       alphabeta=self.alphabeta)
                     next_move, next_score = me_again.move_score(
-                            new_board, color, alpha, beta)
+                            board, color, alpha, beta)
                     if next_move:
                         score = next_score
+
             if score > best_score:
                 best_score = score
                 if self.random:
@@ -185,9 +194,13 @@ class Search:
                 if best_score > alpha:
                     alpha = best_score
                 if self.alphabeta and alpha >= beta:
+                    board.unplay()
                     break
             elif self.random and score == best_score:
                 best_move.append((i, j))
+
+            board.unplay()
+
         if self.random:
             if best_move:
                 return choice(best_move), best_score
@@ -201,7 +214,6 @@ class Game:
         self.player1 = player1
         self.player2 = player2
         self.board = Board()
-        self.board.start()
         self.player1.time = 0.0
         self.player2.time = 0.0
 
@@ -218,20 +230,15 @@ class Game:
         color = BLACK
         passes = 0
         while True:
-            if show:
-                print self.board.show_legal_positions(color)
-
             start = time()
             move = player.move(self.board, color)
             player.time += time() - start
 
             if move:
+                i, j = move
+                kills = self.board.play(i, j, color)
                 if show:
-                    new_board = deepcopy(self.board)
-                    new_board.play(move, color, highlight=True)
-                    print new_board
-                kills = self.board.play(move, color)
-                assert kills > 0, "invalid move:\n%s" % self.board
+                    print self.board.show_last_move()
                 passes = 0
             else:
                 if show:
@@ -241,24 +248,22 @@ class Game:
                 else:
                     break
             player = self.switch(player)
-            color = Reverse(color)
+            color = REVERSE[color]
 
         if show:
-            if self.board.blacks > self.board.whites:
+            if self.board.count[BLACK] > self.board.count[WHITE]:
                     print '%s won!' % self.player1.__class__.__name__
-            elif self.board.blacks < self.board.whites:
+            elif self.board.count[BLACK] < self.board.count[WHITE]:
                     print '%s won!' % self.player2.__class__.__name__
             else:
                     print 'draw!'
             print 'time: %.2f, %.2f' % (self.player1.time, self.player2.time)
 
     def winner(self):
-        if self.board.blacks > self.board.whites:
-            return BLACK
-        elif self.board.blacks < self.board.whites:
-            return WHITE
-        else:
+        if self.board.count[BLACK] == self.board.count[WHITE]:
             return EMPTY
+        else:
+            return max([BLACK, WHITE], key=lambda c: self.board.count[c])
 
 
 class GameSet:
@@ -298,7 +303,6 @@ class GameSet:
 
 def parse_query(path):
     query = urlparse(path).query
-    print query
     return dict(pair.split('=') for pair in query.split('&'))
 
 
@@ -310,22 +314,48 @@ class Handler(RequestHandler):
             getattr(self, method)(parse_query(self.path))
         else:
             RequestHandler.do_GET(self)
+    
+    def send(self, s):
+        s = str(s)
+        self.wfile.write(b'HTTP/1.0 200 OK\r\nContent-Length: %s\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n%s\r\n' % (len(s), s))
 
     def cell(self, query):
         i = int(query['i'])
         j = int(query['j'])
-        self.wfile.write(board.grid[i][j])
+        self.send(board.grid[i][j])
 
     def play(self, query):
         i = int(query['i'])
         j = int(query['j'])
-        kills = board.try_play((i, j), BLACK)
-        self.wfile.write(kills)
+        print 'x: (%s, %s)' % (i, j)
+        kills = board.try_play(i, j, BLACK)
+        if kills:
+            print 'x += %s' % kills
+        else:
+            print 'invalid move'
+        self.send(kills)
 
     def respond(self, query):
-        move = Search(6).move(board, WHITE)
-        kills = board.play(move, WHITE)
-        self.wfile.write(kills)
+        move = Search(7, alphabeta=True).move(board, WHITE)
+        if not move:
+            print 'I pass'
+            return
+        i, j = move
+        print 'o: (%s, %s)' % (i, j)
+        kills = board.play(i, j, WHITE)
+        print 'o += %s' % kills
+        if list(board.valid_moves(BLACK)):
+            self.send(kills)
+        else:
+            print 'you pass'
+            sleep(4)
+            self.send('you pass')
+
+    def count(self, query):
+        color = query['color']
+        print color
+        self.send(board.count[color])
+
 
 def serve():
     server = BaseHTTPServer.HTTPServer(("", 8080), Handler)
@@ -333,12 +363,11 @@ def serve():
 
 if __name__ == '__main__':
     board = Board()
-    board.start()
     serve()
 
     #g = Game(Search(2, random=False, alphabeta=False), Search(7, random=False, alphabeta=True))
     #g.run(show=True)
 
-    #games = GameSet(Search(4), Search(5))
-    #games.run(100, show=True)
+    #games = GameSet(Search(5), Search(5, alphabeta=True))
+    #games.run(10, show=True)
     #print games.result()
